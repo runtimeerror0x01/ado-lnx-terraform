@@ -1,0 +1,66 @@
+name: Build & Push Linux Image To ACR
+
+on:
+  push:
+    branches:
+      - none
+
+env:
+  BUILD: false
+  DEPLOY_AGENT: true
+  LNX_INSTANCES_COUNT: 1
+  AZP_LNX_POOL: default
+  ACI_GROUP_NAME: agent1
+  ACR_NAME: your-acr-name
+  AZURE_RG: your-resource-group
+  LNX_AGENT_ROOT: path/to/linux/agent/root
+  IMAGE_VERSION: latest
+  AZP_PAT: your-azure-devops-pat
+  AZP_URL: your-azure-devops-url
+  DNS_SERVERS: ""
+  LOCATION: uksouth
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}  # Only run on push to main branch
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Build and Push Image using Azure CLI
+      run: |
+        az acr login --name $ACR_NAME
+        az acr build -f ${{ env.LNX_AGENT_ROOT }}/Dockerfile \
+                     --registry $ACR_NAME ${{ env.LNX_AGENT_ROOT }} \
+                     --image "ado-lnx-agent:${IMAGE_VERSION}" \
+                     --image "ado-lnx-agent:latest" 
+
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.commits[0].added | contains('main.bicep') }}  # Only run on push to main branch and if main.bicep was added
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Deploy Linux Agent ACI
+      run: |
+        environmentVariables='[
+          {"name":"AZP_TOKEN","secureValue":"$AZP_PAT"},
+          {"name":"AZP_URL","value":"$AZP_URL"},
+          {"name":"AZP_POOL","value":"${{ env.AZP_LNX_POOL }}"}
+        ]'
+        [ -n "$DNS_SERVERS" ] && dnsServers="$DNS_SERVERS" || dnsServers="[]"
+
+        # deploy ACI
+        az deployment group create \
+        --name deploy-aci \
+        --resource-group $AZURE_RG \
+        --template-file ${{ env.ROOT2 }}/aci/main.bicep \
+        --parameters environmentVariables="$environmentVariables" \
+                    instances=$LNX_INSTANCES_COUNT \
+                    aciGroupName=${{ matrix.aciGroupName }} \
+                    dnsServers="$dnsServers" 
+
