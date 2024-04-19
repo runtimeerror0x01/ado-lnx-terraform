@@ -6,20 +6,19 @@ on:
       - none
 
 env:
-  BUILD: false
-  DEPLOY_AGENT: true
+  build: false
+  deploy: true
   LNX_INSTANCES_COUNT: 1
   AZP_LNX_POOL: default
   ACI_GROUP_NAME: agent1
-  ACR_NAME: your-acr-name
-  AZURE_RG: your-resource-group
-  LNX_AGENT_ROOT: path/to/linux/agent/root
-  IMAGE_VERSION: latest
-  AZP_PAT: your-azure-devops-pat
-  AZP_URL: your-azure-devops-url
+  ACR_NAME: calmacr
+  AZURE_RG: ado-rg
+  LNX_AGENT_ROOT: $(Build.SourcesDirectory)/agent
+  IMAGE_VERSION: v1.0.0.$(Build.BuildId)
+  AZP_URL: $(System.TeamFoundationCollectionUri)
   DNS_SERVERS: ""
   LOCATION: uksouth
-
+ 
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,10 +29,10 @@ jobs:
 
     - name: Build and Push Image using Azure CLI
       run: |
-        az acr login --name $ACR_NAME
+        az acr login --name ${{ env.ACR_NAME }}
         az acr build -f ${{ env.LNX_AGENT_ROOT }}/Dockerfile \
                      --registry $ACR_NAME ${{ env.LNX_AGENT_ROOT }} \
-                     --image "ado-lnx-agent:${IMAGE_VERSION}" \
+                     --image "ado-lnx-agent:${{ env.IMAGE_VERSION }}" \
                      --image "ado-lnx-agent:latest" 
 
   deploy:
@@ -46,11 +45,11 @@ jobs:
     - name: Deploy Linux Agent ACI
       run: |
         environmentVariables='[
-          {"name":"AZP_TOKEN","secureValue":"$AZP_PAT"},
-          {"name":"AZP_URL","value":"$AZP_URL"},
+          {"name":"AZP_TOKEN","secureValue":"${{env.AZP_PAT}}"},
+          {"name":"AZP_URL","value":"${{env.AZP_URL}}"},
           {"name":"AZP_POOL","value":"${{ env.AZP_LNX_POOL }}"}
         ]'
-        [ -n "$DNS_SERVERS" ] && dnsServers="$DNS_SERVERS" || dnsServers="[]"
+        [ -n "${{ env.DNS_SERVERS }}" ] && dnsServers="${{ env.DNS_SERVERS }}" || dnsServers="[]"
 
         # deploy ACI
         az deployment group create \
@@ -58,7 +57,7 @@ jobs:
         --resource-group $AZURE_RG \
         --template-file ${{ env.ROOT2 }}/aci/main.bicep \
         --parameters environmentVariables="$environmentVariables" \
-                    instances=$LNX_INSTANCES_COUNT \
-                    aciGroupName=${{ matrix.aciGroupName }} \
+                    instances=${{ env.LNX_INSTANCES_COUNT }} \
+                    aciGroupName=${{ env.ACI_GROUP_NAME }} \
                     dnsServers="$dnsServers" 
 
