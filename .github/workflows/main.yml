@@ -1,6 +1,13 @@
 name: Build & Push Linux Image To ACR
 
 on:
+  workflow_dispatch:
+    inputs:
+          linux_instances_count:
+            description: 'Number of Linux instances to deploy'
+            required: true
+            type: int
+            default: '1'
   push:
     branches:
       - none
@@ -8,7 +15,7 @@ on:
 env:
   build: false
   deploy: true
-  LNX_INSTANCES_COUNT: 1
+  # LNX_INSTANCES_COUNT: 1
   AZP_LNX_POOL: default
   ACI_GROUP_NAME: agent1
   ACR_NAME: calmacr
