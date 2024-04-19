@@ -23,7 +23,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}  # Only run on push to main branch
 
     steps:
     - name: Checkout code
@@ -39,8 +38,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.commits[0].added | contains('main.bicep') }}  # Only run on push to main branch and if main.bicep was added
-
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
